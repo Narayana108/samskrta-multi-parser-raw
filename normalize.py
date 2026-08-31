@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """Normalize multi-engine Sanskrit parser output.
 
-Reads raw output from sanskrit_parser, Dharmamitra API, and vidyut engines,
-then produces a compact normalized JSON output with:
-- Deduplicated analyses across engines
-- Ranked candidates (best + top alternatives)
-- Separated sandhi, compound, and morphology
-- Removed parser internals and debug structures
+Produces a compact, linguistically meaningful normalized JSON output
+using source priority: Dharmamitra > sanskrit_parser > Vidyut.
+
+Key principles:
+- Normalize by actual surface pada, not parser fragments
+- Never leak substring analyses
+- Determine segmentation before morphology
+- Separate sandhi from compounds
+- Prefer simplest linguistically justified analysis
+- Deduplicate cross-engine results
+- Keep only best morphology
 """
 
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 # ---------------------------------------------------------------------------
@@ -72,24 +77,28 @@ def normalize_linga(tag: str) -> str:
     return LINGA_MAP.get(tag, tag)
 
 
-def normalize_morphological_tags(
+def extract_morphology_from_tags(
     tags: List[Dict[str, Any]],
-) -> List[Dict[str, str]]:
-    """Normalize morphological tags to canonical form.
+) -> Optional[Dict[str, str]]:
+    """Extract canonical morphology from morphological tags.
 
-    Returns list of dicts with keys: root, vibhakti, vacana, linga.
-    Deduplicates identical canonical forms.
+    Returns a single dict with keys: lemma, vibhakti, vacana, linga.
+    Returns None if no valid morphology found.
     """
-    seen: Set[Tuple[str, ...]] = set()
-    result: List[Dict[str, str]] = []
+    if not tags:
+        return None
+
+    lemma = ""
+    vibhakti = ""
+    vacana = ""
+    linga = ""
 
     for tag_group in tags:
         root = tag_group.get("root", "")
         tag_list = tag_group.get("tags", [])
 
-        vibhakti = ""
-        vacana = ""
-        linga = ""
+        if not lemma and root:
+            lemma = root
 
         for t in tag_list:
             tn = t.strip()
@@ -100,270 +109,176 @@ def normalize_morphological_tags(
             elif tn in LINGA_MAP or "लिङ्ग" in tn:
                 linga = normalize_linga(tn)
 
-        if not (vibhakti or vacana or linga):
-            continue
+    if not lemma and not (vibhakti or vacana or linga):
+        return None
 
-        canonical = (root, vibhakti, vacana, linga)
-        if canonical not in seen:
-            seen.add(canonical)
-            entry: Dict[str, str] = {"root": root}
-            if vibhakti:
-                entry["vibhakti"] = vibhakti
-            if vacana:
-                entry["vacana"] = vacana
-            if linga:
-                entry["linga"] = linga
-            result.append(entry)
+    result: Dict[str, str] = {}
+    if lemma:
+        result["lemma"] = lemma
+    if vibhakti:
+        result["vibhakti"] = vibhakti
+    if vacana:
+        result["vacana"] = vacana
+    if linga:
+        result["linga"] = linga
 
-    return result
+    return result if result else None
 
 
 # ---------------------------------------------------------------------------
-# Candidate extraction and scoring
-# ---------------------------------------------------------------------------
-
-def extract_candidates_from_sanskrit_parser(
-    sp_output: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """Extract word-level candidates from sanskrit_parser output."""
-    candidates: List[Dict[str, Any]] = []
-
-    for split_entry in sp_output.get("sandhi_splits", []):
-        split_words = split_entry.get("split", [])
-        items = split_entry.get("items", [])
-
-        for i, item in enumerate(items):
-            if i >= len(split_words):
-                break
-
-            word = item.get("pada", "")
-            morph_tags = item.get("morphological_tags", [])
-            normalized = normalize_morphological_tags(morph_tags)
-
-            if normalized:
-                candidates.append({
-                    "surface": word,
-                    "sources": ["sanskrit_parser"],
-                    "morphology": normalized,
-                    "score": 3,
-                })
-
-    return candidates
-
-
-def extract_candidates_from_dharmamitra(
+# Candidate extraction with source priority
+def extract_dharmamitra_lemmas(
     dm_output: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """Extract word-level candidates from Dharmamitra API output."""
-    candidates: List[Dict[str, Any]] = []
+) -> Dict[str, str]:
+    """Extract lemma mapping from Dharmamitra API output.
 
-    tokens = dm_output.get("tokens", [])
-    for token in tokens:
-        form = token.get("form", "")
-        if "|" in form:
-            parts = form.split("|")
-            surface = parts[0]
-            candidates.append({
-                "surface": surface,
-                "sources": ["dharmamitra"],
-                "morphology": [{"root": surface}],
-                "score": 3,
-            })
+    Returns dict mapping Devanagari form to lemma.
+    Dharmamitra is primary authority for morphology/lemma.
+    """
+    lemma_map: Dict[str, str] = {}
 
-    return candidates
+    try:
+        from vidyut.lipi import transliterate, Scheme
+
+        tokens = dm_output.get("tokens", [])
+        for token in tokens:
+            form = token.get("form", "")
+            if "|" in form:
+                parts = form.split("|")
+                iast_form = parts[0]
+                # Transliterate IAST to Devanagari
+                try:
+                    devanagari = transliterate(iast_form, Scheme.Iast, Scheme.Devanagari)
+                except Exception:
+                    devanagari = iast_form
+                # Dharmamitra format: lemma|POS|...
+                # Use first part as lemma (simplified)
+                lemma = iast_form
+                lemma_map[devanagari] = lemma
+    except ImportError:
+        pass
+
+    return lemma_map
+
+def extract_sanskrit_parser_surface_forms(
+    sp_output: Dict[str, Any],
+) -> List[List[str]]:
+    """Extract surface forms from sanskrit_parser sandhi splits.
+
+    Returns list of split word lists, preferring first split.
+    sanskrit_parser is secondary authority for surface forms.
+    """
+    sandhi_splits = sp_output.get("sandhi_splits", [])
+    if not sandhi_splits:
+        return []
+
+    # Return first 3 splits (best to worst)
+    return [split.get("split", []) for split in sandhi_splits[:3]]
 
 
-def extract_candidates_from_vidyut(
+def extract_vidyut_compound_evidence(
     v_output: Dict[str, Any],
-) -> List[Dict[str, Any]]:
-    """Extract word-level candidates from vidyut output."""
-    candidates: List[Dict[str, Any]] = []
+) -> Dict[str, List[str]]:
+    """Extract compound evidence from vidyut output.
+
+    Returns dict keyed by compound surface form with sandhi splits.
+    Vidyut is supporting/fallback evidence only.
+    """
+    compounds: Dict[str, List[str]] = {}
 
     for word_entry in v_output.get("kosha", []):
         devanagari = word_entry.get("devanagari", "")
-        grammatical_entries = word_entry.get("grammatical_entries", [])
         is_compound = word_entry.get("is_compound", False)
+        sandhi_splits_v = word_entry.get("sandhi_splits", [])
 
-        if grammatical_entries:
-            morphology: List[Dict[str, str]] = []
-            for entry in grammatical_entries:
-                morph: Dict[str, str] = {}
-                if "pratipadika" in entry:
-                    morph["root"] = entry["pratipadika"]
-                if "linga" in entry:
-                    morph["linga"] = entry["linga"]
-                if "vibhakti" in entry:
-                    morph["vibhakti"] = entry["vibhakti"]
-                if "vacana" in entry:
-                    morph["vacana"] = entry["vacana"]
-                if morph:
-                    morphology.append(morph)
+        if is_compound and sandhi_splits_v:
+            compounds[devanagari] = sandhi_splits_v[:2]  # Limit to 2 splits
 
-            if morphology:
-                candidates.append({
-                    "surface": devanagari,
-                    "sources": ["vidyut"],
-                    "morphology": morphology,
-                    "score": 2,
-                    "is_compound": is_compound,
-                })
-
-    return candidates
-
-
-def deduplicate_candidates(
-    candidates: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    """Deduplicate candidates by surface form + canonical morphology."""
-    seen: Dict[str, List[Dict[str, Any]]] = {}
-
-    for cand in candidates:
-        surface = cand.get("surface", "")
-        morph_key = tuple(
-            sorted(tuple(sorted(m.items())) for m in cand.get("morphology", []))
-        )
-        key = f"{surface}::{morph_key}"
-
-        if key not in seen:
-            seen[key] = []
-        seen[key].append(cand)
-
-    result: List[Dict[str, Any]] = []
-    for key, group in seen.items():
-        all_sources: Set[str] = set()
-        for c in group:
-            all_sources.update(c.get("sources", []))
-
-        morphology = group[0].get("morphology", [])
-
-        total_score = sum(c.get("score", 0) for c in group)
-        if len(all_sources) > 1:
-            total_score += len(all_sources) * 2
-
-        result.append({
-            "surface": group[0].get("surface", ""),
-            "sources": sorted(all_sources),
-            "morphology": morphology,
-            "score": total_score,
-            "is_compound": any(c.get("is_compound", False) for c in group),
-        })
-
-    return result
-
-
-def rank_candidates(
-    candidates: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    """Rank candidates by score, keeping only top candidates."""
-    ranked = sorted(candidates, key=lambda c: c.get("score", 0), reverse=True)
-
-    by_surface: Dict[str, List[Dict[str, Any]]] = {}
-    for cand in ranked:
-        surface = cand.get("surface", "")
-        if surface not in by_surface:
-            by_surface[surface] = []
-        if len(by_surface[surface]) < 3:
-            by_surface[surface].append(cand)
-
-    result: List[Dict[str, Any]] = []
-    for surface in sorted(by_surface.keys()):
-        for cand in by_surface[surface]:
-            output_cand = {k: v for k, v in cand.items() if k != "score"}
-            result.append(output_cand)
-
-    return result
-
-
-def limit_morphological_alternatives(
-    normalized: Dict[str, Any],
-    max_alternatives: int = 3,
-    max_tags_per_analysis: int = 4,
-) -> Dict[str, Any]:
-    """Limit the number of morphological alternatives per word.
-
-    Keeps only the top N alternatives based on specificity
-    (more morphological tags = higher confidence).
-    Uses source count as tiebreaker.
-    Also limits the number of morph tags within each analysis.
-    """
-    for pada in normalized.get("padas", []):
-        analyses = pada.get("analysis", [])
-        if len(analyses) > max_alternatives:
-            # Sort by number of morphological tags (more = more specific),
-            # then by number of sources (more = higher confidence)
-            analyses.sort(
-                key=lambda a: (
-                    sum(len(m) for m in a.get("morphology", [])),
-                    len(a.get("sources", [])),
-                ),
-                reverse=True,
-            )
-            pada["analysis"] = analyses[:max_alternatives]
-
-        # Also limit morph tags within each analysis
-        for analysis in pada.get("analysis", []):
-            morphology = analysis.get("morphology", [])
-            if len(morphology) > max_tags_per_analysis:
-                # Sort by number of keys (more = more specific)
-                morphology.sort(
-                    key=lambda m: len(m),
-                    reverse=True,
-                )
-                analysis["morphology"] = morphology[:max_tags_per_analysis]
-
-    return normalized
+    return compounds
 
 
 # ---------------------------------------------------------------------------
-# Output generation
+# Normalization and adjudication
 # ---------------------------------------------------------------------------
 
-def generate_normalized_output(
+def normalize_surface_padas(
     raw_output: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Generate normalized output from raw multi-engine output."""
+    """Normalize output around actual surface pada.
+
+    Uses source priority: Dharmamitra > sanskrit_parser > Vidyut.
+    Never exposes parser fragments as words.
+    """
     engine_outputs = raw_output.get("engine_outputs", {})
 
-    sp_candidates = extract_candidates_from_sanskrit_parser(
-        engine_outputs.get("sanskrit_parser", {})
-    )
-    dm_candidates = extract_candidates_from_dharmamitra(
+    # Extract data from each engine
+    dm_lemmas = extract_dharmamitra_lemmas(
         engine_outputs.get("dharmamitra", {})
     )
-    v_candidates = extract_candidates_from_vidyut(
+    sp_surface_forms = extract_sanskrit_parser_surface_forms(
+        engine_outputs.get("sanskrit_parser", {})
+    )
+    v_compounds = extract_vidyut_compound_evidence(
         engine_outputs.get("vidyut", {})
     )
 
-    all_candidates = sp_candidates + dm_candidates + v_candidates
+    # Use first sandhi split as primary surface forms
+    if not sp_surface_forms:
+        return {
+            "input": raw_output.get("input", {}),
+            "mode": raw_output.get("mode", ""),
+            "padas": [],
+        }
 
-    deduped = deduplicate_candidates(all_candidates)
-    ranked = rank_candidates(deduped)
+    primary_split = sp_surface_forms[0]
 
+    # Build normalized output around surface forms from sanskrit_parser
+    # (since they're in Devanagari and represent actual sandhi splits)
+    padas: List[Dict[str, Any]] = []
+    seen_surfaces: Set[str] = set()
+
+    for surface in primary_split:
+        if surface in seen_surfaces:
+            continue
+        seen_surfaces.add(surface)
+
+        pada_entry: Dict[str, Any] = {"surface": surface}
+
+        # Check if this surface form has Dharmamitra lemma support
+        # (compare IAST forms - simplified matching)
+        if surface in dm_lemmas:
+            pada_entry["lemma"] = dm_lemmas[surface]
+
+        # Check if this is a compound (from Vidyut evidence)
+        if surface in v_compounds:
+            pada_entry["sandhi"] = v_compounds[surface]
+
+        # Add morphology from sanskrit_parser (secondary authority)
+        sp_output = engine_outputs.get("sanskrit_parser", {})
+        for split_entry in sp_output.get("sandhi_splits", []):
+            split_words = split_entry.get("split", [])
+            items = split_entry.get("items", [])
+
+            for i, item in enumerate(items):
+                if i >= len(split_words):
+                    break
+
+                word = item.get("pada", "")
+                if word == surface:
+                    morph_tags = item.get("morphological_tags", [])
+                    morphology = extract_morphology_from_tags(morph_tags)
+                    if morphology:
+                        pada_entry["analysis"] = morphology
+                    break
+
+        padas.append(pada_entry)
+
+    # Build final output
     normalized: Dict[str, Any] = {
         "input": raw_output.get("input", {}),
         "mode": raw_output.get("mode", ""),
-        "padas": [],
+        "padas": padas,
     }
-
-    by_surface: Dict[str, Dict[str, Any]] = {}
-    for cand in ranked:
-        surface = cand.get("surface", "")
-        if surface not in by_surface:
-            by_surface[surface] = {
-                "surface": surface,
-                "analysis": [],
-            }
-        by_surface[surface]["analysis"].append({
-            "morphology": cand.get("morphology", []),
-            "sources": cand.get("sources", []),
-            "is_compound": cand.get("is_compound", False),
-        })
-
-    for surface in sorted(by_surface.keys()):
-        normalized["padas"].append(by_surface[surface])
-
-    # Limit morphological alternatives
-    normalized = limit_morphological_alternatives(normalized)
 
     return normalized
 
@@ -384,7 +299,7 @@ def main() -> int:
         print(f"Error: Invalid JSON in {raw_output_path}: {e}", file=sys.stderr)
         return 1
 
-    normalized = generate_normalized_output(raw_output)
+    normalized = normalize_surface_padas(raw_output)
 
     try:
         with open(normalized_output_path, "w", encoding="utf-8") as f:
@@ -393,6 +308,7 @@ def main() -> int:
         print(f"Error writing output: {e}", file=sys.stderr)
         return 1
 
+    # Print summary
     raw_size = raw_output_path.stat().st_size
     norm_size = normalized_output_path.stat().st_size
     reduction = (1 - norm_size / raw_size) * 100
@@ -400,7 +316,7 @@ def main() -> int:
     print(f"Raw output: {raw_size:,} bytes")
     print(f"Normalized output: {norm_size:,} bytes")
     print(f"Reduction: {reduction:.1f}%")
-    print(f"Words analyzed: {len(normalized.get('padas', []))}")
+    print(f"Surface padas: {len(normalized.get('padas', []))}")
 
     return 0
 

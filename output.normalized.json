@@ -6,591 +6,91 @@
   "mode": "shloka",
   "padas": [
     {
-      "surface": "आविव",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "अव्",
-              "vacana": "द्विवचनम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "इ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "इ",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "आ",
-              "vibhakti": "सप्तमी",
-              "vacana": "एकवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "ई",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "जगतः",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "जगत्",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "प्रथमा",
-              "vacana": "एकवचनम्"
-            },
-            {
-              "root": "जगत्",
-              "linga": "नपुंसकलिङ्गम्",
-              "vibhakti": "सम्बोधनम्",
-              "vacana": "एकवचनम्"
-            },
-            {
-              "root": "जगत्",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "सम्बोधनम्",
-              "vacana": "एकवचनम्"
-            }
-          ],
-          "sources": [
-            "vidyut"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "जगतस्",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "जगत्",
-              "vibhakti": "सम्बोधन",
-              "vacana": "बहुवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            },
-            {
-              "root": "जगत्",
-              "vibhakti": "पञ्चमी",
-              "vacana": "एकवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "जगत्",
-              "vibhakti": "सम्बोधन",
-              "vacana": "बहुवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "जगत्",
-              "vibhakti": "द्वितीया",
-              "vacana": "बहुवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "परमेश्वरौ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "परमेश्वर",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "परमेश्वर",
-              "vibhakti": "सम्बोधन",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "परमेश्वर",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "पार्वती",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "पार्वत",
-              "vibhakti": "प्रथमा",
-              "vacana": "एकवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            },
-            {
-              "root": "पार्वती",
-              "vibhakti": "प्रथमा",
-              "vacana": "एकवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            },
-            {
-              "root": "पार्वति",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "पार्वति",
-              "vibhakti": "सम्बोधन",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "पितरौ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "पितृ",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "पितृ",
-              "vibhakti": "सम्बोधन",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "पितृ",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        },
-        {
-          "morphology": [
-            {
-              "root": "पितृ",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्"
-            },
-            {
-              "root": "पितृ",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्"
-            },
-            {
-              "root": "पितृ",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "सम्बोधनम्",
-              "vacana": "द्विवचनम्"
-            }
-          ],
-          "sources": [
-            "vidyut"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "पृक्तौ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "पृक्त",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "पृक्त",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "पृक्त",
-              "vibhakti": "सम्बोधन",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "पृक्ति",
-              "vibhakti": "सप्तमी",
-              "vacana": "एकवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "प्रतिपत्तये",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "प्रतिपत्ति",
-              "vibhakti": "चतुर्थी",
-              "vacana": "एकवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "व",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "व",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "व",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "व",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "व",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "वन्दे",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "वन्द",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "वन्द",
-              "vibhakti": "सप्तमी",
-              "vacana": "एकवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "वन्द",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            },
-            {
-              "root": "वन्द",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "स्त्रीलिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        },
-        {
-          "morphology": [
-            {
-              "vacana": "एकवचनम्"
-            }
-          ],
-          "sources": [
-            "vidyut"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "वागर्थ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "वागर्थ",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "वागर्थ",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "वागर्थास्",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "वागर्थ",
-              "vibhakti": "सम्बोधन",
-              "vacana": "बहुवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "वागर्थ",
-              "vibhakti": "प्रथमा",
-              "vacana": "बहुवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
       "surface": "वागर्थौ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "वागर्थ",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "वागर्थ",
-              "vibhakti": "सम्बोधन",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "वागर्थ",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
+      "analysis": {
+        "lemma": "वागर्थ",
+        "vibhakti": "द्वितीया",
+        "vacana": "द्विवचनम्",
+        "linga": "पुंल्लिङ्गम्"
+      }
     },
     {
-      "surface": "विव",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "विव",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "विव",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "विव",
-              "vibhakti": "सम्बोधन",
-              "vacana": "एकवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "विव",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "संपृक्तौ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "संपृच्",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्"
-            },
-            {
-              "root": "संपृच्",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्"
-            },
-            {
-              "root": "संपृच्",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "सम्बोधनम्",
-              "vacana": "द्विवचनम्"
-            },
-            {
-              "root": "संपृच्",
-              "linga": "पुंलिङ्गम्",
-              "vibhakti": "सप्तमी",
-              "vacana": "एकवचनम्"
-            }
-          ],
-          "sources": [
-            "vidyut"
-          ],
-          "is_compound": false
-        }
-      ]
-    },
-    {
-      "surface": "सम्",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "स",
-              "vibhakti": "द्वितीया",
-              "vacana": "एकवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "स",
-              "vibhakti": "प्रथमा",
-              "vacana": "एकवचनम्",
-              "linga": "नपुंसकलिङ्गम्"
-            },
-            {
-              "root": "स",
-              "vibhakti": "द्वितीया",
-              "vacana": "एकवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
+      "surface": "इव",
+      "analysis": {
+        "lemma": "इव"
+      }
     },
     {
       "surface": "सम्पृक्तौ",
-      "analysis": [
-        {
-          "morphology": [
-            {
-              "root": "सम्पृक्त",
-              "vibhakti": "प्रथमा",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "सम्पृक्त",
-              "vibhakti": "सम्बोधन",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            },
-            {
-              "root": "सम्पृक्त",
-              "vibhakti": "द्वितीया",
-              "vacana": "द्विवचनम्",
-              "linga": "पुंल्लिङ्गम्"
-            }
-          ],
-          "sources": [
-            "sanskrit_parser"
-          ],
-          "is_compound": false
-        }
-      ]
+      "analysis": {
+        "lemma": "सम्पृक्त",
+        "vibhakti": "द्वितीया",
+        "vacana": "द्विवचनम्",
+        "linga": "पुंल्लिङ्गम्"
+      }
+    },
+    {
+      "surface": "वागर्थ",
+      "analysis": {
+        "lemma": "वागर्थ",
+        "vibhakti": "सम्बोधन",
+        "vacana": "एकवचनम्",
+        "linga": "पुंल्लिङ्गम्"
+      }
+    },
+    {
+      "surface": "प्रतिपत्तये",
+      "analysis": {
+        "lemma": "प्रतिपत्ति",
+        "vibhakti": "चतुर्थी",
+        "vacana": "एकवचनम्",
+        "linga": "स्त्रीलिङ्गम्"
+      }
+    },
+    {
+      "surface": "जगतस्",
+      "analysis": {
+        "lemma": "जगत्",
+        "vibhakti": "प्रथमा",
+        "vacana": "बहुवचनम्",
+        "linga": "स्त्रीलिङ्गम्"
+      }
+    },
+    {
+      "surface": "पितरौ",
+      "analysis": {
+        "lemma": "पितृ",
+        "vibhakti": "द्वितीया",
+        "vacana": "द्विवचनम्",
+        "linga": "पुंल्लिङ्गम्"
+      }
+    },
+    {
+      "surface": "वन्दे",
+      "analysis": {
+        "lemma": "वन्द्",
+        "vibhakti": "द्वितीया",
+        "vacana": "द्विवचनम्",
+        "linga": "स्त्रीलिङ्गम्"
+      }
+    },
+    {
+      "surface": "पार्वती",
+      "analysis": {
+        "lemma": "पार्वत",
+        "vibhakti": "द्वितीया",
+        "vacana": "द्विवचनम्",
+        "linga": "पुंल्लिङ्गम्"
+      }
+    },
+    {
+      "surface": "परमेश्वरौ",
+      "analysis": {
+        "lemma": "परमेश्वर",
+        "vibhakti": "द्वितीया",
+        "vacana": "द्विवचनम्",
+        "linga": "पुंल्लिङ्गम्"
+      }
     }
   ]
 }
