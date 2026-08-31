@@ -5,10 +5,35 @@ Runs three independent engines (sanskrit_parser, Dharmamitra API, vidyut)
 on the same Devanagari input and produces structured JSON results under
 distinct top-level keys in a single output file.
 
+Architecture:
+    app.py (CLI entry point)
+    ├── preprocess_devanagari()     # Strip classical punctuation (।, ॥)
+    ├── devanagari_to_iast()        # Convert Devanagari → IAST
+    ├── read_input()                # Read from file or stdin
+    ├── run_sanskrit_parser()       # Local: sandhi + morphology + vakya
+    ├── run_dharmamitra()           # Remote: API-based lemma tags
+    ├── run_vidyut()                # Local: kosha + prakriya + meter + sandhi
+    ├── normalize.py                # Normalization & deduplication layer
+    └── main()                      # Orchestrates all engines, writes JSON
+
+Engine capabilities:
+    - sanskrit_parser: Sandhi splitting, morphological tags, vakya (sentence) parsing
+    - dharmamitra: Sandhi splitting with lemma morphosyntax tags (remote API)
+    - vidyut: Kosha dictionary lookup, dhatu/pratipadika prakriya, meter classification,
+              recursive sandhi splitting via DFS through kosha dictionary
+
 Usage:
     python app.py pada -i input.txt          # single-word analysis
     python app.py shloka -i input.txt        # full-line analysis
     python app.py shloka -i -                # read from stdin
+
+Output:
+    - output.json: Raw JSON with all three engine outputs
+    - output.normalized.json: Compact normalized output (run normalize.py separately)
+
+Error isolation:
+    Each engine runs independently. If one fails, its key contains {"error": "..."}
+    and execution continues for the remaining engines.
 """
 
 import argparse
@@ -19,17 +44,16 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
 # Suppress sanskrit_parser debug logging
 import logging
 logging.getLogger("sanskrit_parser").setLevel(logging.WARNING)
 logging.getLogger("sanskrit_util").setLevel(logging.WARNING)
 
 
-
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
+# API and data directory settings for all three engines.
 
 API_URL = "https://dharmamitra.org/api/tagging/"
 API_HEADERS = {
@@ -38,7 +62,8 @@ API_HEADERS = {
 }
 API_MODE = "unsandhied-lemma-morphosyntax"
 
-# Vidyut data directory
+# Vidyut data directory — contains kosha, prakriya, chandas, sandhi, cheda subdirectories
+# Override via VIDYUT_DATA_DIR environment variable
 DATA_DIR = os.environ.get(
     "VIDYUT_DATA_DIR",
     str(Path(__file__).resolve().parent / "data-0.4.0"),
@@ -48,21 +73,49 @@ DATA_DIR = os.environ.get(
 # ---------------------------------------------------------------------------
 # Preprocessing
 # ---------------------------------------------------------------------------
+# Functions to clean and convert Devanagari input before processing.
 
 def preprocess_devanagari(text: str) -> str:
-    """Clean Devanagari text: remove classical punctuation (।, ॥)."""
+    """Clean Devanagari text: remove classical punctuation (।, ॥).
+    
+    Args:
+        text: Raw Devanagari text with possible classical punctuation
+    
+    Returns:
+        Cleaned text with punctuation stripped and whitespace trimmed
+    """
     cleaned = text.replace("।", "").replace("॥", "").strip()
     return cleaned
 
 
 def devanagari_to_iast(devanagari_text: str) -> str:
-    """Convert cleaned Devanagari text to IAST using vidyut lipi."""
+    """Convert cleaned Devanagari text to IAST using vidyut lipi.
+    
+    IAST (International Alphabet of Sanskrit Transliteration) is an ASCII-safe
+    encoding used for API communication and internal processing.
+    
+    Args:
+        devanagari_text: Cleaned Devanagari text
+    
+    Returns:
+        IAST-encoded string
+    """
     from vidyut.lipi import transliterate, Scheme
     return transliterate(devanagari_text, Scheme.Devanagari, Scheme.Iast)
 
 
 def read_input(filename: str) -> str:
-    """Read and strip trailing whitespace from input file."""
+    """Read and strip trailing whitespace from input file.
+    
+    Args:
+        filename: Path to input file, or '-' to read from stdin
+    
+    Returns:
+        Stripped input text
+    
+    Raises:
+        FileNotFoundError: If file doesn't exist
+    """
     if filename == "-":
         return sys.stdin.read().strip()
     try:
@@ -75,6 +128,8 @@ def read_input(filename: str) -> str:
 # ---------------------------------------------------------------------------
 # Devanagari label maps — PyO3 enum values → Devanagari
 # ---------------------------------------------------------------------------
+# These maps convert internal enum string representations to canonical
+# Devanagari forms for consistent output across all engines.
 
 VIBHAKTI_DEVANAGARI = {
     "praTamA": "प्रथमा",
@@ -143,9 +198,20 @@ PRAYOGA_DEVANAGARI = {
 # ---------------------------------------------------------------------------
 # sanskrit_parser engine adapter
 # ---------------------------------------------------------------------------
+# Wraps the sanskrit_parser Python package to provide:
+# - Sandhi splitting (splitting compounded words into constituent pada)
+# - Morphological tag extraction (root, vibhakti, vacana, linga, etc.)
+# - Vakya (sentence) parsing with dependency graphs
 
 def _slp1_to_devanagari(slp1: str) -> str:
-    """Transliterate an SLP1 Sanskrit string to Devanagari."""
+    """Transliterate an SLP1 Sanskrit string to Devanagari.
+    
+    Args:
+        slp1: IAST or SLP1 encoded string
+    
+    Returns:
+        Devanagari string
+    """
     from indic_transliteration import sanscript
     try:
         return sanscript.transliterate(slp1, sanscript.SLP1, sanscript.DEVANAGARI)
@@ -156,7 +222,14 @@ def _slp1_to_devanagari(slp1: str) -> str:
 def _morphological_tags_to_json(
     tags,
 ) -> List[Dict[str, Any]]:
-    """Convert morphological tags to JSON-serializable list of dicts."""
+    """Convert morphological tags to JSON-serializable list of dicts.
+    
+    Args:
+        tags: List of (root, tag_set) tuples from sanskrit_parser
+    
+    Returns:
+        List of dicts with 'root' (Devanagari) and 'tags' (sorted Devanagari tags)
+    """
     if tags is None:
         return []
     result = []
@@ -171,7 +244,14 @@ def _morphological_tags_to_json(
 
 
 def _parse_node_to_json(node) -> Dict[str, Any]:
-    """Convert a ParseNode to JSON-serializable dict."""
+    """Convert a ParseNode to JSON-serializable dict.
+    
+    Args:
+        node: ParseNode from sanskrit_parser vakya parsing
+    
+    Returns:
+        Dict with pada, root, and tags
+    """
     return {
         "pada": node.pada,
         "root": _slp1_to_devanagari(str(node.parse_tag.root)),
@@ -180,7 +260,14 @@ def _parse_node_to_json(node) -> Dict[str, Any]:
 
 
 def _parse_edge_to_json(edge) -> Optional[Dict[str, Any]]:
-    """Convert a ParseEdge to JSON-serializable dict with predecessor info."""
+    """Convert a ParseEdge to JSON-serializable dict with predecessor info.
+    
+    Args:
+        edge: ParseEdge from sanskrit_parser vakya parsing
+    
+    Returns:
+        Dict with pada, root, tags, predecessor, and sambandha
+    """
     pred = edge.predecessor
     node = edge.node
     return {
@@ -197,7 +284,14 @@ def _parse_edge_to_json(edge) -> Optional[Dict[str, Any]]:
 
 
 def _build_vakya_graph(graph: List[Any]) -> List[Dict[str, Any]]:
-    """Build vakya parse graph from interleaved ParseNode/ParseEdge list."""
+    """Build vakya parse graph from interleaved ParseNode/ParseEdge list.
+    
+    Args:
+        graph: Interleaved list of ParseNode and ParseEdge objects
+    
+    Returns:
+        Ordered list of node dicts with predecessor and sambandha attached
+    """
     nodes: Dict[str, Dict[str, Any]] = {}
     edges: List[Dict[str, Any]] = []
 
@@ -233,9 +327,16 @@ def _build_vakya_graph(graph: List[Any]) -> List[Dict[str, Any]]:
 
 def run_sanskrit_parser(input_text: str, mode: str) -> Dict[str, Any]:
     """Run sanskrit_parser engine on the input text.
-
+    
     Returns structured results with sandhi splits, morphological tags,
     and (for shloka mode) vakya parses.
+    
+    Args:
+        input_text: Cleaned Devanagari text
+        mode: 'pada' for single-word or 'shloka' for full-line analysis
+    
+    Returns:
+        Dict with mode, input, and sandhi_splits list
     """
     from sanskrit_parser.api import Parser
     from indic_transliteration import sanscript
@@ -301,14 +402,31 @@ def run_sanskrit_parser(input_text: str, mode: str) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # Dharmamitra API engine adapter
 # ---------------------------------------------------------------------------
+# Sends IAST text to the Dharmamitra API and returns structured JSON
+# with sandhi-split tokens and morphological tags.
 
 def _parse_tokens(raw_output: str) -> List[Dict[str, Any]]:
-    """Parse underscore-separated API output into structured tokens."""
+    """Parse underscore-separated API output into structured tokens.
+    
+    Args:
+        raw_output: Raw API response string with underscore-separated tokens
+    
+    Returns:
+        List of token dicts with 'form' and 'tagged' fields
+    """
     return [{"form": seg, "tagged": True} for seg in raw_output.split("_") if seg]
 
 
 def run_dharmamitra(iast_text: str, iast_lines: List[str]) -> Dict[str, Any]:
-    """Send IAST text to Dharmamitra API and return structured JSON."""
+    """Send IAST text to Dharmamitra API and return structured JSON.
+    
+    Args:
+        iast_text: IAST-encoded input text
+        iast_lines: List of IAST-encoded input lines
+    
+    Returns:
+        Dict with api_endpoint, mode, input_lines, raw_output, and tokens
+    """
     import requests
 
     data = {
@@ -342,9 +460,22 @@ def run_dharmamitra(iast_text: str, iast_lines: List[str]) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # vidyut engine adapter
 # ---------------------------------------------------------------------------
+# Runs vidyut for:
+# - Cheda segmentation (word splitting)
+# - Kosha dictionary lookup (grammatical entries)
+# - Sandhi splitting (recursive compound decomposition via DFS)
+# - Prakriya (derivation steps for dhatus and pratipadikas)
+# - Meter classification (chandas)
 
 def _slp1_to_devanagari_vidyut(slp1_text: str) -> str:
-    """Convert SLP1 text to Devanagari via vidyut lipi."""
+    """Convert SLP1 text to Devanagari via vidyut lipi.
+    
+    Args:
+        slp1_text: SLP1-encoded text
+    
+    Returns:
+        Devanagari string
+    """
     from vidyut.lipi import transliterate, Scheme
     if not slp1_text:
         return ""
@@ -353,10 +484,17 @@ def _slp1_to_devanagari_vidyut(slp1_text: str) -> str:
 
 def kosha_lookup(kosha, word: str) -> list:
     """Look up a word in the kosha dictionary, with stem normalization fallback.
-
+    
     First tries exact match, then progressively shorter stems (stripping 1-3
     SLP1 characters) to handle surface forms like nominative ``vAco`` → stem
     ``vAca``.
+    
+    Args:
+        kosha: Kosha dictionary instance
+        word: SLP1-encoded word to look up
+    
+    Returns:
+        List of grammatical entries, or empty list if not found
     """
     try:
         entries = kosha.get(word)
@@ -378,8 +516,17 @@ def kosha_lookup(kosha, word: str) -> list:
             pass
 
     return []
+
+
 def _is_debug_text(text: str) -> bool:
-    """Check if a prakriya step text is an English debug/logging string."""
+    """Check if a prakriya step text is an English debug/logging string.
+    
+    Args:
+        text: Text to check
+    
+    Returns:
+        True if text appears to be debug/logging output
+    """
     if not text:
         return False
     if '==' in text or '::' in text:
@@ -392,7 +539,15 @@ def _is_debug_text(text: str) -> bool:
 
 
 def _format_pada_entry_json(entry) -> Dict[str, Any]:
-    """Format a PadaEntry as a JSON-serializable dict."""
+    """Format a PadaEntry as a JSON-serializable dict.
+    
+    Args:
+        entry: PadaEntry from vidyut prakriya
+    
+    Returns:
+        Dict with type, pratipadika, artha, linga, vibhakti, vacana,
+        dhatu, gana, prayoga, lakara, purusha as applicable
+    """
     from vidyut.lipi import transliterate, Scheme
     result = {}
 
@@ -437,7 +592,14 @@ def _format_pada_entry_json(entry) -> Dict[str, Any]:
 
 
 def _format_prakriya_steps(prakriya) -> List[Dict[str, Any]]:
-    """Format prakriya derivation steps as a list of JSON-serializable dicts."""
+    """Format prakriya derivation steps as a list of JSON-serializable dicts.
+    
+    Args:
+        prakriya: Prakriya object from vidyut vyakarana
+    
+    Returns:
+        List of step dicts with step number, sutra, source, terms_dev, changed_dev
+    """
     steps = []
     history = prakriya.history
     if not history:
@@ -495,7 +657,14 @@ def _format_prakriya_steps(prakriya) -> List[Dict[str, Any]]:
 
 
 def _split_into_padas(slp1_line: str) -> List[str]:
-    """Split a SLP1 line into 8-syllable quarter-verses (padas)."""
+    """Split a SLP1 line into 8-syllable quarter-verses (padas).
+    
+    Args:
+        slp1_line: SLP1-encoded line of text
+    
+    Returns:
+        List of SLP1-encoded padas (typically 2 halves for a full verse)
+    """
     from vidyut.lipi import transliterate, Scheme
 
     tokens = slp1_line.split()
@@ -545,15 +714,28 @@ def _split_into_padas(slp1_line: str) -> List[str]:
 
 
 def _is_terminal(kosha, word: str) -> bool:
-    """Check if a word is a known dictionary entry (terminal node)."""
+    """Check if a word is a known dictionary entry (terminal node).
+    
+    Args:
+        kosha: Kosha dictionary instance
+        word: SLP1-encoded word
+    
+    Returns:
+        True if word has kosha entries
+    """
     return len(kosha_lookup(kosha, word)) > 0
 
 
 def _get_kosha_info(kosha, word: str) -> Optional[Dict[str, Any]]:
     """Get kosha info for a word: type and lemma.
-
-    Returns dict with 'type' (सुन्तन्तः/तिन्तन्तः/अव्ययम्) and
-    'lemma' (Devanagari), or None if not found.
+    
+    Args:
+        kosha: Kosha dictionary instance
+        word: SLP1-encoded word
+    
+    Returns:
+        Dict with 'type' (सुन्तन्तः/तिन्तन्तः/अव्ययम्) and 'lemma' (Devanagari),
+        or None if not found
     """
     entries = kosha_lookup(kosha, word)
     if not entries:
@@ -572,13 +754,21 @@ def _get_kosha_info(kosha, word: str) -> Optional[Dict[str, Any]]:
 
 def _is_quality_split(splitter, kosha, word: str) -> List[Any]:
     """Check if a binary split is semantically valid.
-
+    
     Filters out spurious matches where very short strings match verb roots.
     Criteria:
       - Both parts must be ≥ 3 characters
       - Both parts must have kosha entries
       - Both parts must have at least 2 kosha entries (filters spurious matches)
       - Both parts must have at least one non-derived (standalone) entry
+    
+    Args:
+        splitter: Splitter instance for sandhi rules
+        kosha: Kosha dictionary instance
+        word: SLP1-encoded word to split
+    
+    Returns:
+        List of (split, first_info, second_info) tuples for valid splits
     """
     def _has_standalone_entry(entries):
         """Check if entries include at least one standalone word (not all derived)."""
@@ -619,24 +809,25 @@ def _is_quality_split(splitter, kosha, word: str) -> List[Any]:
 
 def recursive_split(splitter, kosha, word: str, max_depth: int = 4, max_parts: int = 4) -> List[List[Dict[str, Any]]]:
     """Recursively resolve multi-part compounds using DFS.
-
+    
     Records intact dictionary matches as leaf chains (macro-compound level)
     and continues exploring deeper splits (micro-phonetic level).
-
+    
     Recurses into both first and second halves to produce chains like:
       - [वाक्, अर्थ, इव] (deepest)
       - [वागर्थ, इव] (medium)
       - [वागर्था, विव] (shallowest)
-
+    
     Args:
         splitter: Splitter instance for sandhi rules
         kosha: Kosha instance for dictionary lookup
         word: SLP1-encoded word to split
         max_depth: Maximum recursion depth
         max_parts: Maximum number of parts in a chain (prevents over-splitting)
-
-    Returns list of split chains, each chain is a list of dicts:
-    [{"part": slp1_text, "dev": devanagari_text, "kosha": {...}|None}, ...]
+    
+    Returns:
+        List of split chains, each chain is a list of dicts:
+        [{"part": slp1_text, "dev": devanagari_text, "kosha": {...}|None}, ...]
     """
     results = []
 
@@ -697,11 +888,22 @@ def recursive_split(splitter, kosha, word: str, max_depth: int = 4, max_parts: i
     results.sort(key=chain_score, reverse=True)
 
     return results
+
+
 def run_vidyut(devanagari_text: str, iast_text: str, iast_lines: List[str], mode: str) -> Dict[str, Any]:
     """Run vidyut engine: cheda segmentation, kosha lookup, sandhi splitting, prakriya, meter.
-
+    
     Uses input text directly — cheda for word segmentation, sandhi (Splitter)
     for recursive compound splitting, kosha for dictionary lookup.
+    
+    Args:
+        devanagari_text: Cleaned Devanagari text
+        iast_text: IAST-encoded text
+        iast_lines: List of IAST-encoded lines
+        mode: 'pada' or 'shloka'
+    
+    Returns:
+        Dict with kosha, prakriya, meter, cheda, and sandhi sections
     """
     from pathlib import Path
     from vidyut.lipi import transliterate, Scheme
@@ -961,9 +1163,17 @@ def run_vidyut(devanagari_text: str, iast_text: str, iast_lines: List[str], mode
 # ---------------------------------------------------------------------------
 # Main pipeline
 # ---------------------------------------------------------------------------
+# Orchestrates all three engines and writes the final JSON output.
 
 def main() -> int:
-    """Main entry point."""
+    """Main entry point.
+    
+    Parses CLI arguments, reads input, runs all three engines,
+    and writes the combined JSON output.
+    
+    Returns:
+        0 on success, 1 on error
+    """
     parser = argparse.ArgumentParser(
         description="samskrta-multi-parser-raw — Unified multi-engine Sanskrit analyzer"
     )

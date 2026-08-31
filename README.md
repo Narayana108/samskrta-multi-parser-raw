@@ -14,6 +14,22 @@ This tool analyzes Sanskrit text (single words or full shloka lines) through thr
 
 Each engine runs independently. If one fails, its key contains `{"error": "..."}` and execution continues for the remaining engines.
 
+## Architecture
+
+```
+app.py (CLI entry point)
+├── preprocess_devanagari()     # Strip classical punctuation (।, ॥)
+├── devanagari_to_iast()        # Convert Devanagari → IAST
+├── read_input()                # Read from file or stdin
+├── run_sanskrit_parser()       # Local: sandhi + morphology + vakya
+├── run_dharmamitra()           # Remote: API-based lemma tags
+├── run_vidyut()                # Local: kosha + prakriya + meter + sandhi
+├── normalize.py                # Normalization & deduplication layer
+└── main()                      # Orchestrates all engines, writes JSON
+```
+
+The vidyut engine implements recursive compound sandhi splitting using DFS traversal through the kosha dictionary and sandhi rules, with quality filtering to prevent spurious splits.
+
 ## Prerequisites
 
 - **Python 3.10+**
@@ -44,6 +60,9 @@ uv run python app.py shloka
 
 # Custom input and output
 uv run python app.py shloka -i my_shloka.txt -o result.json
+
+# Read from stdin
+echo "वागर्थाविव संपृक्तौ वागर्थप्रतिपत्तये" | uv run python app.py shloka -i - -o result.json
 ```
 
 ## CLI Arguments
@@ -235,22 +254,6 @@ $ uv run python app.py shloka -o /tmp/output.json
 $ cat /tmp/output.json | python3 -m json.tool
 ```
 
-## Architecture
-
-```
-app.py (CLI entry point)
-├── preprocess_devanagari()     # Strip classical punctuation
-├── devanagari_to_iast()        # Convert Devanagari → IAST
-├── read_input()                # Read from file or stdin
-├── run_sanskrit_parser()       # Local: sandhi + morphology + vakya
-├── run_dharmamitra()           # Remote: API-based lemma tags
-├── run_vidyut()                # Local: kosha + prakriya + meter + sandhi
-├── normalize.py                # Normalization & deduplication layer
-└── main()                      # Orchestrates all engines, writes JSON
-```
-
-The vidyut engine implements recursive compound sandhi splitting using DFS traversal through the kosha dictionary and sandhi rules, with quality filtering to prevent spurious splits.
-
 ## Two-Output Architecture
 
 The system produces two outputs:
@@ -298,7 +301,7 @@ This turns a ~100KB raw output into a ~3KB normalized output while preserving al
 
 ```json
 {
-  "input": {"devanagari": "वागर्थाविव...", "iast": "vāgarthāviva..."},
+  "input": {"devanagari": "वागर्थाविव संपृक्तौ वागर्थप्रतिपत्तये ।\nजगतः पितरौ वन्दे पार्वतीपरमेश्वरौ ॥", "iast": "vāgarthāviva saṃpṛktau vāgarthapratipattaye \njagataḥ pitarau vande pārvatīparameśvarau"},
   "mode": "shloka",
   "padas": [
     {
@@ -308,6 +311,10 @@ This turns a ~100KB raw output into a ~3KB normalized output while preserving al
         "vibhakti": "द्वितीया",
         "vacana": "द्विवचनम्",
         "linga": "पुंल्लिङ्गम्"
+      },
+      "compound": {
+        "surface": "वागर्थौ",
+        "parts": ["वाच्", "अर्थौ"]
       }
     },
     {
@@ -319,3 +326,17 @@ This turns a ~100KB raw output into a ~3KB normalized output while preserving al
 ```
 
 Each surface form has its canonical morphology, with no parser internals or duplicate candidates.
+
+## Source Priority
+
+The normalization layer uses a strict source priority:
+
+1. **Dharmamitra** — Primary authority for lexical identity and segmentation
+2. **sanskrit_parser** — Secondary authority for surface forms and morphology
+3. **Vidyut** — Supporting/fallback evidence only
+
+This ensures that the normalized output reflects the most reliable analysis available, rather than equal-weight voting or arbitrary selection.
+
+## License
+
+MIT
